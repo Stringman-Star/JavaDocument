@@ -38,7 +38,7 @@
 
   + ![image-20250613170003290](./assets/image-20250613170003290.png)
 
-  + type这条sql的连接类型，性能由好到差从上向下
+  + type：这条sql的连接类型，性能由好到差从上向下
     + NULL：略
     + system：查询系统中的表
     + const：根据主键查询
@@ -58,19 +58,29 @@
 + 二叉搜索树
   + ![image-20250613184351342](./assets/image-20250613184351342.png)
   + 时间不稳定
+  
 + 红黑树
   + ![image-20250613184415304](./assets/image-20250613184415304.png)
+  
+  + > 红黑树是一种**<u>自平衡</u>**的二叉搜索树。每个节点额外存储了一个 color 字段 ("RED" or "BLACK")，用于确保树在插入和删除时保持平衡。
+  
   + 如果数据量巨大的，时间复杂度依旧很高
+  
+  + ![image-20250616224510249](./assets/image-20250616224510249.png)
+  
 + B树
   + ![image-20250613184831685](./assets/image-20250613184831685.png)
+  
 + B+树
   + ![image-20250613184944964](./assets/image-20250613184944964.png)
   + 非叶子节点不存储数据，哪怕是分支节点上的key也会出现在叶子节点上。
   + 叶子节点之间会连成双向链表
+  
 + B树与B+树对比：
   + 磁盘读写代价B+树更低：B树需要将分支节点上的data也读入，B+树分支节点无data查询效率更高；此外B+树只需要存储key的树，没有data所以存储压力更低
   + 查询效率B+树更加稳定：因为数据全部在叶子节点，所以查找路径长度差不多
   + B+树便于扫库和区间查询：叶子节点连成双向链表，只要找到了其中一个节点就可以通过链表进行区间查询
+  
 + ![image-20250613190115360](./assets/image-20250613190115360.png)
 
 #### 聚集索引与非聚集索引
@@ -124,11 +134,11 @@
      + 如果符合最左前缀，跳过中间的某一列，则只有左边满足法则的列生效，即只有name生效![image-20250613201759340](./assets/image-20250613201759340.png)
   2. 某一索引范围查询，则会导致右边的索引失效
      + name和status走的索引，address没有![image-20250613202012013](./assets/image-20250613202012013.png)
-  3. 不要再索引列上进行运算操作，该索引及其右边索引也会失效
+  3. 不要在索引列上进行运算操作，该索引及其右边索引也会失效
      + ![image-20250613202906594](./assets/image-20250613202906594.png)
   4. 字符串不加单引号，造成该索引及其右边索引失效。
      + 类型转换导致失效![image-20250613202954546](./assets/image-20250613202954546.png)
-  5. 以%开头的Like模糊查询，索引师兄啊。如果仅仅是尾部模糊匹配，索引不会失效。如果是头部则会失效。
+  5. 以%开头的Like模糊查询，索引失效。如果仅仅是尾部模糊匹配，索引不会失效。如果是头部则会失效。
      + ![image-20250613203920983](./assets/image-20250613203920983.png)
 
 ### SQL优化
@@ -198,15 +208,159 @@
 
 + redo log：记录的是数据页的物理变化，服务宕机可用来同步数据
 + undo log：记录的是逻辑日志，当事务回滚是，通过逆操作恢复原来的数据
-+ redo log保证了事物的持久性，undo log保证了事物的原子性和一致性
-+ redo log用于已经commit之后，持久化过程中，undo log用于在commit之前
++ redo log保证了事物的**<u>持久性</u>**，undo log保证了事物的**<u>原子性和一致性</u>**
++ redo log用于已经commit之后，持久化过程中。undo log用于在commit之前。
 
 
 
 ### MVCC
 
+> 实现**<u>隔离性</u>**：
+>
+> + 锁：排他锁（如一个事务获得了一个数据行的排他锁，其他事务就不能再获取该行其他锁）
+> + mvcc：多版本并发控制
+>
+> 全称**M**ulti-**V**ersion **C**oncurrency **C**ontrol，多版本并发控制。只维护一个数据的多个版本，使得读写操作没有冲突。
 
++ MVCC的具体实现，主要依赖于数据库记录中的<u>隐式字段，undo log日志，readView</u>。
++ 隐式字段
+  + ![image-20250614133745642](./assets/image-20250614133745642.png)
++ undo log
+  + ![image-20250614141902019](./assets/image-20250614141902019.png)
+  + 版本链![image-20250614143218971](./assets/image-20250614143218971.png)
++ readView
+  + ![image-20250614143237584](./assets/image-20250614143237584.png)
+  + 当前读![image-20250614143306477](./assets/image-20250614143306477.png)
+  + 快照读![image-20250616223056324](./assets/image-20250616223056324.png)
 
 ​    
+
+
+
+## Java集合
+
+**Java集合框架体系**
+
++ ![image-20250616224152748](./assets/image-20250616224152748.png)
++ 线程安全：指添加了synchronized锁，同时性能低
++ LinkedList底层是双向链表
++ ConcurrentHashMap：线程安全的实现方式不一样
+
+### List相关
+
++ 数据结构-数组
+
+  + ![image-20250617160925375](./assets/image-20250617160925375.png)
+  + ![image-20250617161017133](./assets/image-20250617161017133.png)
+
++ **ArrayList源码分析**
+
+  + 成员变量：
+
+    ```java
+        private static final long serialVersionUID = 8683452581122892189L;
+    
+        private static final int DEFAULT_CAPACITY = 10;
+    //初始容量
+        private static final Object[] EMPTY_ELEMENTDATA = {};
+        private static final Object[] DEFAULTCAPACITY_EMPTY_ELEMENTDATA = {};
+        transient Object[] elementData;
+        private int size;
+    ```
+    
+  + 有参，无参，对象拷贝构造函数
+  
+    ```java
+        public ArrayList(int initialCapacity) {
+            if (initialCapacity > 0) {
+                this.elementData = new Object[initialCapacity];
+            } else if (initialCapacity == 0) {
+                this.elementData = EMPTY_ELEMENTDATA;
+            } else {
+                throw new IllegalArgumentException("Illegal Capacity: "+
+                                                   initialCapacity);
+            }
+        }
+        
+        public ArrayList() {
+            this.elementData = DEFAULTCAPACITY_EMPTY_ELEMENTDATA;
+            //默认容量 但是是空集合
+        }
+    
+    	
+    	public ArrayList(Collection<? extends E> c) {
+            Object[] a = c.toArray();
+            if ((size = a.length) != 0) {
+                if (c.getClass() == ArrayList.class) {
+                    elementData = a;
+                } else {
+                    elementData = Arrays.copyOf(a, size, Object[].class);
+                }
+            } else {
+                // replace with empty array.
+                elementData = EMPTY_ELEMENTDATA;
+            }
+        }
+    //将collection队列转化为数组，然后将数组的地址赋给elementData
+    	
+    ```
+  
+  + 添加和扩容操作![image-20250623143831694](./assets/image-20250623143831694.png)
+  
++ ArrayList相关面试题
+
+  + 底层用动态的数组实现
+  + 初始容量为0，默认容量为10。但是要在第一次添加数据的时候，空数组才会被设置为默认容量
+  + 每次扩容是扩容到1.5倍，每次扩容需要拷贝数组
+  + 添加数据流程：
+    1. 用size记录逻辑容量，然后size+1;
+    2. 根据size计算至少需要分配的容量，如果是无参构造，那么就最少是10
+    3. 更具最少需要分配的容量判断物理容量是否满足要求，不满足则用grow做扩容
+    4. 每次扩容物理容量的1.5倍，如果还不够（比如实际物理容量是0，扩容还是0），则直接将要求的最小容量设置为物理容量。用Arrays.copuOf（）做迁移
+  + ArrayList list=new ArrayList(10)中的list需要扩容几次？制定了具体容量，则不做扩容
+
++ 数组和List之间的转换
+
+  + 数组转List。
+
+    ```java
+    String[] strs={"aaa","bbb","ccc"};
+    List<String> list=Arrays.asList(strs);
+    ```
+
+  + 当修改strs的时候，list也会受影响。原因是asList方法本质上是添加了一个指针做引用。不过要注意此时list的实现并非是之前使用的ArrayList，而是Arrays里面的一个内部类。所以实现方式和我们之前使用的ArrayList不一样。
+
+  + List转数组
+
+    ```java
+    String[] arr=list.toArray(new String[list.size]);
+    ```
+
++ ArrayList和LinkedList之间的区别是什么？
+
+  + ![image-20250623154035661](./assets/image-20250623154035661.png)
+  + ![image-20250623154116692](./assets/image-20250623154116692.png)
+
+
+### HashMap相关
+
++ 数据结构：红黑树，二叉树，散列表
+  + ![image-20250623163823480](./assets/image-20250623163823480.png)
+  + 在添加或删除节点的时候，如果不符合这些性质会发生旋转，以达到所有的性质
+  + 查找，添加，删除时间复杂度都是O(log n)
++ 实现原理
+  + ![image-20250623164543049](./assets/image-20250623164543049.png)
+  + ![image-20250623164723406](./assets/image-20250623164723406.png)
++ put方法的流程
+  + ![image-20250623164959461](./assets/image-20250623164959461.png)
+  + ![image-20250623165314564](./assets/image-20250623165314564.png)
+  + 第一次添加数据![image-20250623165443465](./assets/image-20250623165443465.png)
+  + ![image-20250623165735482](./assets/image-20250623165735482.png)
+
+
+
+
+
+
 
 ​    
