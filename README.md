@@ -213,7 +213,7 @@
 
 
 
-### MVCC
+### <u>（*）MVCC</u>
 
 > 实现**<u>隔离性</u>**：
 >
@@ -233,7 +233,7 @@
   + 当前读![image-20250614143306477](./assets/image-20250614143306477.png)
   + 快照读![image-20250616223056324](./assets/image-20250616223056324.png)
 
-​    
+
 
 
 
@@ -315,7 +315,7 @@
   + 添加数据流程：
     1. 用size记录逻辑容量，然后size+1;
     2. 根据size计算至少需要分配的容量，如果是无参构造，那么就最少是10
-    3. 更具最少需要分配的容量判断物理容量是否满足要求，不满足则用grow做扩容
+    3. 根据最少需要分配的容量判断物理容量是否满足要求，不满足则用grow做扩容
     4. 每次扩容物理容量的1.5倍，如果还不够（比如实际物理容量是0，扩容还是0），则直接将要求的最小容量设置为物理容量。用Arrays.copuOf（）做迁移
   + ArrayList list=new ArrayList(10)中的list需要扩容几次？制定了具体容量，则不做扩容
 
@@ -345,22 +345,391 @@
 ### HashMap相关
 
 + 数据结构：红黑树，二叉树，散列表
+
   + ![image-20250623163823480](./assets/image-20250623163823480.png)
   + 在添加或删除节点的时候，如果不符合这些性质会发生旋转，以达到所有的性质
   + 查找，添加，删除时间复杂度都是O(log n)
+
 + 实现原理
+
   + ![image-20250623164543049](./assets/image-20250623164543049.png)
   + ![image-20250623164723406](./assets/image-20250623164723406.png)
+
 + put方法的流程
+
   + ![image-20250623164959461](./assets/image-20250623164959461.png)
+
   + ![image-20250623165314564](./assets/image-20250623165314564.png)
+
   + 第一次添加数据![image-20250623165443465](./assets/image-20250623165443465.png)
+
   + ![image-20250623165735482](./assets/image-20250623165735482.png)
 
+  + 源码
+
+    ```java
+        final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
+                       boolean evict) {
+            Node<K,V>[] tab; Node<K,V> p; int n, i;
+            //判断表是否为空，空则resize，分配内存空间
+            if ((tab = table) == null || (n = tab.length) == 0)
+                n = (tab = resize()).length;
+            //将hash值取模，判断插入的位置否是是空，是的或则插入
+            if ((p = tab[i = (n - 1) & hash]) == null)
+                tab[i] = newNode(hash, key, value, null);
+            else {//如果不为空
+                Node<K,V> e; K k;
+                if (p.hash == hash &&
+                    ((k = p.key) == key || (key != null && key.equals(k))))
+                    //如果key相同则覆盖
+                    e = p;
+                else if (p instanceof TreeNode)
+                    //如果不相同并且是红黑树，则插入到树中
+                    e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+                else {//如果是链表
+                    for (int binCount = 0; ; ++binCount) {
+                        if ((e = p.next) == null) {//如果链表里面无该key，则插入
+                            p.next = newNode(hash, key, value, null);
+                            if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                            //之后判断是否满足将链表转化为红黑树的条件，满足就转换
+                                treeifyBin(tab, hash);
+                            break;
+                        }
+                        if (e.hash == hash &&
+                            ((k = e.key) == key || (key != null && key.equals(k))))//如果链表中存在该元素，则break;
+                            break;
+                        p = e;
+                    }
+                }
+                if (e != null) { // 存在该key，则覆盖掉
+                    V oldValue = e.value;
+                    if (!onlyIfAbsent || oldValue == null)
+                        e.value = value;
+                    afterNodeAccess(e);
+                    return oldValue;
+                }
+            }
+            ++modCount;
+            if (++size > threshold)//如果此时大于0.75了，扩容
+                resize();
+            afterNodeInsertion(evict);
+            return null;
+        }
+    ```
+
++ 扩容机制
+
+  + ![image-20250624201104635](./assets/image-20250624201104635.png)
+
+  + 源码
+
+    ```java
+    final Node<K,V>[] resize() {
+            Node<K,V>[] oldTab = table;
+            int oldCap = (oldTab == null) ? 0 : oldTab.length;
+            int oldThr = threshold;
+            int newCap, newThr = 0;
+        //因为是懒加载，所以要判断是否是第一次add
+            if (oldCap > 0) {//已经被初始化了
+                if (oldCap >= MAXIMUM_CAPACITY) {
+                    //做安全校验
+                    threshold = Integer.MAX_VALUE;
+                    return oldTab;
+                }
+                else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
+                         oldCap >= DEFAULT_INITIAL_CAPACITY)
+                //如果没超过最大容量限制，就对就容量做翻倍
+                    newThr = oldThr << 1; // double threshold
+            }
+            else if (oldThr > 0) // initial capacity was placed in threshold
+                newCap = oldThr;
+            else {//未被初始化，则设置默认容量，默认门槛               
+                newCap = DEFAULT_INITIAL_CAPACITY;
+                newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
+            }
+            if (newThr == 0) {
+                float ft = (float)newCap * loadFactor;
+                newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
+                          (int)ft : Integer.MAX_VALUE);
+            }
+            threshold = newThr;
+            @SuppressWarnings({"rawtypes","unchecked"})
+        //创建一个新的数组，大小是newCap，如果是初始化的话，newCap就是默认值
+            Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
+            table = newTab;
+            if (oldTab != null) {
+                for (int j = 0; j < oldCap; ++j) {
+                    //遍历数组
+                    Node<K,V> e;
+                    if ((e = oldTab[j]) != null) {//是否由key存在
+                        oldTab[j] = null;
+                        if (e.next == null)
+                            //该key处只有一个数据，添加到新数组中。hash对新长度取余
+                            newTab[e.hash & (newCap - 1)] = e;
+                        else if (e instanceof TreeNode)
+                            //如果是红黑树，则对红黑树做添加
+                            ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+                        else { 
+                            //如果该key是链表,有next，则遍历链表
+                            Node<K,V> loHead = null, loTail = null;
+                            Node<K,V> hiHead = null, hiTail = null;
+                            Node<K,V> next;
+                            do {
+                                next = e.next;
+                                if ((e.hash & oldCap) == 0) {
+                                    //这边是在做一个检验，作用是，如果为0，key可以从放入loHead链里面
+                                    if (loTail == null)
+                                        loHead = e;
+                                    else
+                                        loTail.next = e;
+                                    loTail = e;
+                                }
+                                else {
+                                    //如果不是0，旧放入hiHead链里面
+                                    if (hiTail == null)
+                                        hiHead = e;
+                                    else
+                                        hiTail.next = e;
+                                    hiTail = e;
+                                }
+                            } while ((e = next) != null);
+                            //统一迁移lo,hi
+                            if (loTail != null) {
+                                //(e.hash & oldCap) == 0 直接迁移
+                                loTail.next = null;
+                                newTab[j] = loHead;
+                            }
+                            if (hiTail != null) {
+                                //否则就迁移到index+oldCap的index处
+                                hiTail.next = null;
+                                newTab[j + oldCap] = hiHead;
+                            }
+                        }
+                    }
+                }
+            }
+            return newTab;
+        }
+    ```
+
++ HashMap的寻址算法
+
+  + ![image-20250624214654373](./assets/image-20250624214654373.png)
+  + ![image-20250624214858181](./assets/image-20250624214858181.png)
+
++ HashMap在1.7情况下多线程死循环问题
+
+  + ![image-20250709112320055](./assets/image-20250709112320055.png)
+  + ![image-20250709112800306](./assets/image-20250709112800306.png)
+  + ![image-20250709113047078](./assets/image-20250709113047078.png)
+
+
+## JUC
+
+### 线程基础
+
+#### 创建线程的方式
+
++ 继承Thread类
++ 实现runnable接口
++ 实现Callable接口![image-20250709141258278](./assets/image-20250709141258278.png)这种方式可以做到获取线程方法的返回值。泛型中的类要与方法中的返回类型保持一致
++ 线程池创建线程![image-20250709142123349](./assets/image-20250709142123349.png)
+
+#### Runnable和Callable对比
+
++ ![image-20250709142326361](./assets/image-20250709142326361.png)
+
+#### start()和run()对比
+
++ ![image-20250709142505494](./assets/image-20250709142505494.png)
+
+#### 线程状态
+
++ ![image-20250709143030767](./assets/image-20250709143030767.png)
++ ![image-20250709143256183](./assets/image-20250709143256183.png)
+
+#### 线程顺序执行
+
++ ![image-20250709144954207](./assets/image-20250709144954207.png)
+
+#### notify和notifyAll区别
+
++ ![image-20250709145839603](./assets/image-20250709145839603.png)
+
+#### wait和sleep区别
+
++ ![image-20250709150047635](./assets/image-20250709150047635.png)
+
++ ```java
+  private static void illegalWait() throws InterruptedException{
+  //        synchronized (lock) {
+              /*
+              当你对一个对象调用 wait() 时，
+              当前持有该对象锁的线程会释放锁并进入等待状态，
+              直到其他线程调用该对象的 notify() 或 notifyAll() 方法。
+              * */
+              lock.wait();
+  //        }
+      }
+      private static void waiting() throws InterruptedException {
+          Thread t1=new Thread(()->{
+              synchronized (lock) {
+                  try {
+                      System.out.println("t1 is waiting");
+                      lock.wait(5000L);
+                      System.out.println("t1 is wake up");
+                  } catch (InterruptedException e) {
+                      System.out.println("t1 is interrupted");
+                      throw new RuntimeException(e);
+                  }
+              }
+          },"t1");
+          t1.start();
+          Thread.sleep(100);
+          synchronized ( lock){
+              System.out.println("others thread running");
+          }
+      }
+  
+      private static void sleeping() throws InterruptedException {
+          Thread t1=new Thread(()->{
+              synchronized (lock) {
+                  try {
+                      System.out.println("t1 is waiting");
+                      Thread.sleep(5000L);
+                      System.out.println("t1 is wake up");
+                  } catch (InterruptedException e) {
+                      System.out.println("t1 is interrupted");
+                      throw new RuntimeException(e);
+                  }
+              }
+          },"t1");
+          t1.start();
+          Thread.sleep(100);
+          synchronized ( lock){
+              System.out.println("others thread running");
+          }
+      }
+  ```
+
+#### 停止线程
+
++ ![image-20250709160556387](./assets/image-20250709160556387.png)
+
++ ```java
+  public static void interuptTest() throws InterruptedException {
+          //1.打断阻塞线程
+          Thread t1=new Thread(()->{
+              try {
+                  System.out.println("t1 is waiting");
+                  Thread.sleep(5000L);
+                  System.out.println("t1 is wake up");
+              } catch (InterruptedException e) {
+                  System.out.println("t1 is interrupted");
+              }
+          },"t1");
+  //        t1.start();
+  //        Thread.sleep(500);
+  //        t1.interrupt();
+  
+          //2.打断正在运行的线程
+          /*
+          调用 t2.interrupt() 会设置线程的中断标志位为 true，但不会强制终止线程的执行。
+          线程需要自己检查中断状态（通过 Thread.currentThread().isInterrupted()），并决定如何响应中断，
+          比如通过 break 跳出循环来结束线程。
+          这是为了保证线程有机会清理资源、保持状态一致性，而不是被粗暴地终止。
+  
+  
+  
+          当调用 t1.interrupt() 时，若线程正在 sleep，会立即唤醒并抛出该异常，从而退出线程。
+           而运行中的线程不会自动响应中断，需手动检测标志位并配合 break 等控制转移语句才能退出。
+          * */
+          Thread t2=new Thread(()->{
+              while(true){
+                  if(Thread.currentThread().isInterrupted()){
+                      System.out.println("t2被打断");
+                      break;
+                  }
+              }
+          },"t2");
+          t2.start();
+          Thread.sleep(500);
+          t2.interrupt();
+      }
+  ```
+
+### 线程安全
+
+#### <u>（*）synchronized底层原理</u>
+
++ Synchronized【对象锁】采用**互斥**的方式让同一时刻至多只有一个线程能持有【对象锁】，其他线程在想获取这个【对象锁】时就会被阻塞住。
++ ***Monitor***
+  + 由于synchronized锁是由jvm完成，即会有用户态转化为内存态。需要切换上下文和环境，所以消耗大，故称之为重量级锁
+  + ![image-20250709161853279](./assets/image-20250709161853279.png)
+
+#### CAS
+
++ ![image-20250709180438303](./assets/image-20250709180438303.png)
++ ![image-20250710095442680](./assets/image-20250710095442680.png)
++ ![image-20250710095552277](./assets/image-20250710095552277.png)
+
+#### volatile
+
++ ![image-20250710095648819](./assets/image-20250710095648819.png)
++ 保证线程之间的可见性![image-20250710100527902](./assets/image-20250710100527902.png)
++ 禁止指令重排序
+  + ![image-20250710101136971](./assets/image-20250710101136971.png)
+  + ![image-20250710101753778](./assets/image-20250710101753778.png)
+
+#### AQS
+
++ ![image-20250710102407131](./assets/image-20250710102407131.png)
++ ![image-20250710102847017](./assets/image-20250710102847017.png)
++ 在AQS的不同实现类之中，公平锁和不公平锁都能实现![image-20250710102945826](./assets/image-20250710102945826.png)
+
+#### ReentrantLock
+
++ 具有可重入性，已经获取锁的线程再次调用lock是不会被阻塞的![image-20250710103638783](./assets/image-20250710103638783.png)
++ ![image-20250710104355520](./assets/image-20250710104355520.png)
+
+#### synchronized和AQS对比
+
+![image-20250710105452988](./assets/image-20250710105452988.png)
+
+### 线程池
+
+#### 线程池的执行原理与核心参数
+
++ ![image-20250710105806357](./assets/image-20250710105806357.png)
++ ![image-20250710110403340](./assets/image-20250710110403340.png)
 
 
 
+## JVM
 
+![image-20250710111659253](./assets/image-20250710111659253.png)
 
+### JVM组成
 
-​    
+#### heap
+
++ ![image-20250710112337383](./assets/image-20250710112337383.png)
+
+#### JVM Stack
+
++ ![image-20250710112946772](./assets/image-20250710112946772.png)
++  ![image-20250710113703197](./assets/image-20250710113703197.png)
++ ![image-20250710113725032](./assets/image-20250710113725032.png)
++ ![image-20250710113832973](./assets/image-20250710113832973.png)
+
+### 垃圾回收
+
+#### 垃圾判定
+
++ ![image-20250710114236212](./assets/image-20250710114236212.png)
++ ![image-20250710114504468](./assets/image-20250710114504468.png)
++ ![image-20250710115248149](./assets/image-20250710115248149.png)
++ ![image-20250710115308813](./assets/image-20250710115308813.png)
+
+#### 回收算法
+
